@@ -57,6 +57,8 @@ class Api {
         } else {
             $this->response['code'] = false;
             $this->response['message'] = "Invalid Request";
+            $this->response['body'] = $requestData;
+            $this->response['request_methode'] = $_SERVER['REQUEST_METHOD'];
         }
 
         $json_response = json_encode($this->response);
@@ -151,14 +153,17 @@ class Api {
         }
     }
 
-    private function handleNodeResponse($port) {
+    protected function handleNodeResponse($port) {
         // Enregistrez le port de l'application Node.js
         $this->nodeJsPort = $port;
 
         // Vous pouvez effectuer d'autres actions en fonction de la réponse de l'application Node.js ici
 
         // Répondez à l'application Node.js pour confirmer la réception de la valeur
-        echo json_encode(['message' => 'Port received successfully']);
+        $this->response['code'] = true;
+        $this->response['message']= 'Port received successfully';
+
+        
     }
 }
 
@@ -205,12 +210,12 @@ class PortApi extends Api {
     }
 
     public function processRequest() {
-        // Votre logique de traitement pour la requête "port"
-        // Par exemple, récupérer le port et effectuer des opérations spécifiques
-        // ...
-
+        parent::handleNodeResponse($_REQUEST['port']);
+        
         $json_response = json_encode($this->response);
         echo $json_response;
+        echo json_encode($_REQUEST);
+        echo json_encode($_SERVER['REQUEST_METHOD']);
     }
 }
 
@@ -220,9 +225,7 @@ class DLSiteApi extends Api {
     }
 
     public function processRequest() {
-        // Votre logique de traitement pour la requête "dlsite"
-        // Par exemple, récupérer le code DLSite et effectuer des opérations spécifiques
-        // ...
+        parent::handleDLsite($_REQUEST['port']);
 
         $json_response = json_encode($this->response);
         echo $json_response;
