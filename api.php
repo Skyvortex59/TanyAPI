@@ -1,4 +1,7 @@
 <?php
+
+use function PHPSTORM_META\type;
+
 require_once('./db/db.php');
 
 class Api {
@@ -44,16 +47,13 @@ class Api {
             $oeuvrename = $requestData["oeuvre"];
 
             $this->handleOeuvre($oeuvrename);
-        } elseif (isset($requestData['dlsite']) && $requestData['dlsite'] != "") {
-            $dlCode = $requestData["dlsite"];
+        } elseif (isset($requestData['code']) && $requestData['code'] != "" && isset($requestData['request']) && $requestData['request'] != "") {
+            $dlCode = array(
+                'code' => $requestData['code'],
+                'request' => $requestData['request']
+            );
 
             $this->handleDLsite($dlCode);
-        } elseif (isset($requestData['dlsite_nodeJS']) && $requestData['dlsite_nodeJS'] != "") {
-            $dlCode = $requestData["dlsite_nodeJS"];
-
-            $this->handleDLsite($dlCode, true);
-        } elseif (isset($requestData['port']) && $requestData['port'] != "") {
-            $this->handleNodeResponse($requestData['port']);
         } else {
             $this->response['code'] = false;
             $this->response['message'] = "Invalid Request";
@@ -113,58 +113,40 @@ class Api {
         }
     }
 
-    protected function handleDLsite($dlCode, $after = false) {
-        switch ($after) {
-            case false:
-                $nodeJSUrl = "http://localhost:3000"; // Remplacez 3000 par le port utilisé par votre serveur Node.js
-                $url = $nodeJSUrl . "/endpoint"; // Remplacez "/endpoint" par le chemin de l'API sur votre serveur Node.js
+    protected function handleDLsite($dlCode) {
 
-                $data = array(
-                    'code' => $dlCode
-                );
+        $nodeJSUrl = "http://localhost:8080/api/"; // Remplacez 8080 par le port utilisé par votre serveur Node.js
 
-                $options = array(
-                    'http' => array(
-                        'header'  => "Content-type: application/x-www-form-urlencoded\r\n",
-                        'method'  => 'POST',
-                        'content' => http_build_query($data)
-                    )
-                );
+        $options = array(
+            'http' => array(
+                'header'  => "Content-Type: application/json",
+                'method'  => 'POST',
+                'content' => json_encode($dlCode)
+            )
+        );
 
-                $context  = stream_context_create($options);
-                $result = file_get_contents($url, false, $context);
-                $rsp = true;
-                break;
-            case true:
-                break;
-        }
+        $context  = stream_context_create($options);
+        $result = file_get_contents($nodeJSUrl, false, $context);
+        $data = json_decode($result)->response;
+        
+        $code = json_decode($result)->code;
+
 
         // Traitement de la réponse du serveur Node.js si nécessaire
-
-        // $this->response["code"] = true;
-        switch ($rsp) {
+        switch ($code) {
             case true:
                 $this->response['code'] = true;
+                $this->response['response'] = $data;
                 break;
             default:
                 $this->response['code'] = false;
                 $this->response['message'] = "No Record Found";
+                $this->response['response'] = $data;
                 break;
         }
     }
 
-    protected function handleNodeResponse($port) {
-        // Enregistrez le port de l'application Node.js
-        $this->nodeJsPort = $port;
 
-        // Vous pouvez effectuer d'autres actions en fonction de la réponse de l'application Node.js ici
-
-        // Répondez à l'application Node.js pour confirmer la réception de la valeur
-        $this->response['code'] = true;
-        $this->response['message']= 'Port received successfully';
-
-        
-    }
 }
 
 
@@ -204,20 +186,6 @@ class OeuvreApi extends Api {
     }
 }
 
-class PortApi extends Api {
-    public function __construct() {
-        parent::__construct();
-    }
-
-    public function processRequest() {
-        parent::handleNodeResponse($_REQUEST['port']);
-        
-        $json_response = json_encode($this->response);
-        echo $json_response;
-        echo json_encode($_REQUEST);
-        echo json_encode($_SERVER['REQUEST_METHOD']);
-    }
-}
 
 class DLSiteApi extends Api {
     public function __construct() {
@@ -225,7 +193,7 @@ class DLSiteApi extends Api {
     }
 
     public function processRequest() {
-        parent::handleDLsite($_REQUEST['port']);
+        parent::handleDLsite($_REQUEST['dlsite']);
 
         $json_response = json_encode($this->response);
         echo $json_response;
@@ -238,10 +206,7 @@ class DLSiteNodeJSApi extends Api {
     }
 
     public function processRequest() {
-        // Votre logique de traitement pour la requête "dlsite_nodeJS"
-        // Par exemple, récupérer le code DLSite et effectuer des opérations spécifiques
-        // ...
-
+        parent::handleDLsite($_REQUEST['dlsite_nodeJS']);
         $json_response = json_encode($this->response);
         echo $json_response;
     }
@@ -254,8 +219,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $api = new ChapterApi();
     } elseif (isset($_GET['oeuvre'])) {
         $api = new OeuvreApi();
-    } elseif (isset($_GET['port']) && $_GET['port'] != "") {
-        $api = new PortApi();
     } elseif (isset($_GET['dlsite']) && $_GET['dlsite'] != "") {
         $api = new DLSiteApi();
     } elseif (isset($_GET['dlsite_nodeJS']) && $_GET['dlsite_nodeJS'] != "") {
@@ -270,8 +233,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $api = new ChapterApi();
     } elseif (isset($_POST['oeuvre'])) {
         $api = new OeuvreApi();
-    } elseif (isset($_POST['port']) && $_POST['port'] != "") {
-        $api = new PortApi();
     } elseif (isset($_POST['dlsite']) && $_POST['dlsite'] != "") {
         $api = new DLSiteApi();
     } elseif (isset($_POST['dlsite_nodeJS']) && $_POST['dlsite_nodeJS'] != "") {
