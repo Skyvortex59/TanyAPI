@@ -57,7 +57,7 @@ class Api {
         } else {
             $this->response['code'] = false;
             $this->response['message'] = "Invalid Request";
-            $this->response['body'] = $requestData;
+            $this->response['body'] = json_decode($requestData['dlsite'], true);
             $this->response['request_methode'] = $_SERVER['REQUEST_METHOD'];
         }
 
@@ -113,35 +113,109 @@ class Api {
         }
     }
 
+
     protected function handleDLsite($dlCode) {
+        $data = null;
 
-        $nodeJSUrl = "http://localhost:8080/api/"; // Remplacez 8080 par le port utilisé par votre serveur Node.js
+        switch ($dlCode['request']) {
+            case 'img':
+                $check = $this->db2->getDb("tanya")->prepare("SELECT id, cover FROM dlsite WHERE id=:dlCode");
+                $check->execute(array(':dlCode' => $dlCode['code']));
+                $dataRequest = $check->fetch(PDO::FETCH_ASSOC);
+                $row = $check->rowCount();
 
-        $options = array(
-            'http' => array(
-                'header'  => "Content-Type: application/json",
-                'method'  => 'POST',
-                'content' => json_encode($dlCode)
-            )
-        );
+                $data = array(
+                    'image' => $dataRequest['cover']
+                );
+                
+                $code = true;
+                break;
+            case 'name':
+                $check = $this->db2->getDb("tanya")->prepare("SELECT id, name FROM dlsite WHERE id=:dlCode");
+                $check->execute(array(':dlCode' => $dlCode['code']));
+                $dataRequest = $check->fetch(PDO::FETCH_ASSOC);
+                $row = $check->rowCount();
 
-        $context  = stream_context_create($options);
-        $result = file_get_contents($nodeJSUrl, false, $context);
-        $data = json_decode($result)->response;
-        
-        $code = json_decode($result)->code;
+                $data = array(
+                    'name' => $dataRequest['name']
+                );
+                
+                $code = true;
+                break;
+            case 'tags':
+                $check = $this->db2->getDb("tanya")->prepare("SELECT id, tags FROM dlsite WHERE id=:dlCode");
+                $check->execute(array(':dlCode' => $dlCode['code']));
+                $dataRequest = $check->fetch(PDO::FETCH_ASSOC);
+                $row = $check->rowCount();
 
+                $data = array(
+                    'tags' => json_decode(str_replace("\\", '', $dataRequest['tags']), true),
+                );
+                
+                $code = true;
+                break;
+            case 'all-in-one':
+                $check = $this->db2->getDb("tanya")->prepare("SELECT id, name, cover, tags, creator, voice FROM dlsite WHERE id=:dlCode");
+                $check->execute(array(':dlCode' => $dlCode['code']));
+                $dataRequest = $check->fetch(PDO::FETCH_ASSOC);
+                $row = $check->rowCount();
+
+                $data = array(
+                    'image' => $dataRequest['cover'],
+                    'name' => $dataRequest['name'],
+                    'tags' => json_decode(str_replace("\\", '', $dataRequest['tags']), true),
+                    'voice' => $dataRequest['voice']
+                );
+
+                $code = true;
+                break;
+            
+            case 'create':
+
+                $check = $this->db2->getDb("tanya")->prepare("SELECT id, name, cover, tags, creator, voice FROM dlsite WHERE id=:dlCode");
+                $check->execute(array(':dlCode' => $dlCode['code']));
+                $dataRequest = $check->fetch(PDO::FETCH_ASSOC);
+                $row = $check->rowCount();
+
+                if($row == 0) {
+                    $nodeJSUrl = "http://localhost:8080/api/"; // Remplacez 8080 par le port utilisé par votre serveur Node.js
+
+                    $options = array(
+                        'http' => array(
+                            'header'  => "Content-Type: application/json",
+                            'method'  => 'POST',
+                            'content' => json_encode($dlCode)
+                        )
+                    );
+            
+                    $context  = stream_context_create($options);
+                    $result = file_get_contents($nodeJSUrl, false, $context);
+                    $data = json_decode($result)->response;
+
+                    $sql = "INSERT INTO dlsite (id, name, cover, tags, creator, voice) VALUES (?,?,?,?,?,?)";
+                    $this->db2->getDb("tanya")->prepare($sql)->execute($dlCode['code'], $data['name'], $data['image'], $data['tags'], $data['creator'], $data['voice']);
+                    
+                    $code = json_decode($result)->code;
+                }else {
+                    $code = false;
+                    $error = "RJ code already exist in the database";
+                }
+
+                
+                break;
+        }
 
         // Traitement de la réponse du serveur Node.js si nécessaire
         switch ($code) {
             case true:
                 $this->response['code'] = true;
                 $this->response['response'] = $data;
+                $this->response['row'] = $row;
                 break;
             default:
                 $this->response['code'] = false;
-                $this->response['message'] = "No Record Found";
-                $this->response['response'] = $data;
+                $this->response['message'] = $error;
+                $this->response['data'] = $data;
                 break;
         }
     }
@@ -200,17 +274,6 @@ class DLSiteApi extends Api {
     }
 }
 
-class DLSiteNodeJSApi extends Api {
-    public function __construct() {
-        parent::__construct();
-    }
-
-    public function processRequest() {
-        parent::handleDLsite($_REQUEST['dlsite_nodeJS']);
-        $json_response = json_encode($this->response);
-        echo $json_response;
-    }
-}
 
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     if (isset($_GET['data'])) {
@@ -221,8 +284,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $api = new OeuvreApi();
     } elseif (isset($_GET['dlsite']) && $_GET['dlsite'] != "") {
         $api = new DLSiteApi();
-    } elseif (isset($_GET['dlsite_nodeJS']) && $_GET['dlsite_nodeJS'] != "") {
-        $api = new DLSiteNodeJSApi();
     } else {
         $api = new Api();
     }
@@ -235,8 +296,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $api = new OeuvreApi();
     } elseif (isset($_POST['dlsite']) && $_POST['dlsite'] != "") {
         $api = new DLSiteApi();
-    } elseif (isset($_POST['dlsite_nodeJS']) && $_POST['dlsite_nodeJS'] != "") {
-        $api = new DLSiteNodeJSApi();
     } else {
         $api = new Api();
     }
