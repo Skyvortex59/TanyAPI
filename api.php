@@ -57,7 +57,7 @@ class Api {
         } else {
             $this->response['code'] = false;
             $this->response['message'] = "Invalid Request";
-            $this->response['body'] = json_decode($requestData['dlsite'], true);
+            $this->response['body'] = $requestData['dlsite'];
             $this->response['request_methode'] = $_SERVER['REQUEST_METHOD'];
         }
 
